@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -29,6 +31,7 @@ type messageService struct {
 	knowService    interfaces.KnowledgeService     // Service for knowledge operations (index/delete passages)
 	modelService   interfaces.ModelService         // Service for model operations (rerank model)
 	suggestionRepo interfaces.MessageSuggestionRepository
+	chunkRefRepo   interfaces.ReplyChunkReferenceRepository // Repository for reply->chunk associations
 }
 
 // NewMessageService creates a new message service instance with the required repositories
@@ -39,6 +42,7 @@ func NewMessageService(messageRepo interfaces.MessageRepository,
 	knowService interfaces.KnowledgeService,
 	modelService interfaces.ModelService,
 	suggestionRepo interfaces.MessageSuggestionRepository,
+	chunkRefRepo interfaces.ReplyChunkReferenceRepository,
 ) interfaces.MessageService {
 	return &messageService{
 		messageRepo:    messageRepo,
@@ -48,6 +52,7 @@ func NewMessageService(messageRepo interfaces.MessageRepository,
 		knowService:    knowService,
 		modelService:   modelService,
 		suggestionRepo: suggestionRepo,
+		chunkRefRepo:   chunkRefRepo,
 	}
 }
 
@@ -408,6 +413,49 @@ func (s *messageService) IndexMessageToKB(ctx context.Context, userQuery string,
 	}
 
 	logger.Infof(ctx, "Message indexed to chat history KB: knowledge_id=%s, message_id=%s", knowledge.ID, messageID)
+}
+
+// RecordReplyChunkReferences persists the association between an assistant reply
+// and the knowledge chunks it cited. It is invoked once the assistant message is
+// complete, reading the KnowledgeReferences already attached to the message.
+// This powers the like/dislike feedback loop (issue #1248) while keeping the
+// chunk-association internals hidden from end users.
+func (s *messageService) RecordReplyChunkReferences(ctx context.Context, message *types.Message) {
+	refs := message.KnowledgeReferences
+	if len(refs) == 0 {
+		return
+	}
+
+	tenantID, ok := types.TenantIDFromContext(ctx)
+	if !ok {
+		logger.Warnf(ctx, "skipping reply chunk reference recording: tenant not found in context for message %s", message.ID)
+		return
+	}
+
+	batch := make([]*types.ReplyChunkReference, 0, len(refs))
+	for _, ref := range refs {
+		if ref == nil || ref.ID == "" {
+			continue
+		}
+		batch = append(batch, &types.ReplyChunkReference{
+			ID:              uuid.New().String(),
+			TenantID:        tenantID,
+			MessageID:       message.ID,
+			ChunkID:         ref.ID,
+			KnowledgeID:     ref.KnowledgeID,
+			KnowledgeBaseID: ref.KnowledgeBaseID,
+			CreatedAt:       time.Now(),
+		})
+	}
+	if len(batch) == 0 {
+		return
+	}
+
+	if err := s.chunkRefRepo.CreateBatch(ctx, batch); err != nil {
+		logger.Warnf(ctx, "failed to record reply chunk references for message %s: %v", message.ID, err)
+		return
+	}
+	logger.Infof(ctx, "recorded %d reply chunk references for message %s", len(batch), message.ID)
 }
 
 // DeleteMessageKnowledge deletes the Knowledge entry associated with a message from the chat history KB.

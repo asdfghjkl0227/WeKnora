@@ -49,6 +49,10 @@ type MessageService interface {
 	// Called after assistant message is created to enable future vector search.
 	IndexMessageToKB(ctx context.Context, userQuery string, assistantAnswer string, messageID string, sessionID string)
 
+	// RecordReplyChunkReferences persists the association between an assistant reply and the
+	// knowledge chunks it cited. Called after the assistant message is complete (issue #1248).
+	RecordReplyChunkReferences(ctx context.Context, message *types.Message)
+
 	// DeleteMessageKnowledge deletes the Knowledge entry associated with a message from the chat history KB.
 	DeleteMessageKnowledge(ctx context.Context, knowledgeID string)
 

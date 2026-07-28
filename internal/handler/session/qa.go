@@ -1330,6 +1330,9 @@ func (h *Handler) completeAssistantMessage(ctx context.Context, assistantMessage
 	// Use WithoutCancel so the goroutine survives after the HTTP request context is done.
 	bgCtx := context.WithoutCancel(ctx)
 	go h.messageService.IndexMessageToKB(bgCtx, userQuery, assistantMessage.Content, assistantMessage.ID, assistantMessage.SessionID)
+	// Persist the reply→chunk associations for the like/dislike feedback loop (issue #1248).
+	// Runs asynchronously so it never blocks the response stream.
+	go h.messageService.RecordReplyChunkReferences(bgCtx, assistantMessage)
 	if userQuery != "" && h.suggestionService != nil {
 		go func() {
 			if _, err := h.suggestionService.EnsureFollowUps(

@@ -46,6 +46,40 @@
                     :title="$t('agent.addToKnowledgeBase')">
                     <t-icon name="bookmark-add" />
                 </t-button>
+                <!-- 任务1：点赞 / 点踩（含点踩原因弹窗），用户无需感知后端片段关联逻辑 -->
+                <span class="answer-feedback">
+                    <t-button size="small" variant="outline" shape="round" class="feedback-btn"
+                        :class="{ 'is-active': feedback === 'like' }" @click.stop="handleLike"
+                        :title="t('chat.feedbackLike')">
+                        <t-icon name="thumb-up" />
+                    </t-button>
+                    <t-popup placement="top" trigger="click" :visible="dislikeReasonOpen"
+                        @visible-change="onDislikePopupChange">
+                        <t-button size="small" variant="outline" shape="round" class="feedback-btn"
+                            :class="{ 'is-active': feedback === 'dislike' }" :title="t('chat.feedbackDislike')">
+                            <t-icon name="thumb-down" />
+                        </t-button>
+                        <template #content>
+                            <div class="dislike-reason-panel">
+                                <div class="dislike-reason-title">{{ t('chat.feedbackDislikeReasonTitle') }}</div>
+                                <t-radio-group v-model="dislikeReason" class="dislike-reason-group">
+                                    <t-radio value="inaccurate">{{ t('chat.feedbackReasonInaccurate') }}</t-radio>
+                                    <t-radio value="incomplete">{{ t('chat.feedbackReasonIncomplete') }}</t-radio>
+                                    <t-radio value="irrelevant">{{ t('chat.feedbackReasonIrrelevant') }}</t-radio>
+                                    <t-radio value="other">{{ t('chat.feedbackReasonOther') }}</t-radio>
+                                </t-radio-group>
+                                <t-textarea v-model="dislikeReasonDetail" :placeholder="t('chat.feedbackReasonPlaceholder')"
+                                    :autosize="{ minRows: 2, maxRows: 3 }" class="dislike-reason-detail" />
+                                <div class="dislike-reason-actions">
+                                    <t-button size="small" theme="default" variant="text"
+                                        @click.stop="cancelDislike">{{ t('chat.feedbackCancel') }}</t-button>
+                                    <t-button size="small" theme="primary"
+                                        @click.stop="submitDislike">{{ t('chat.feedbackSubmit') }}</t-button>
+                                </div>
+                            </div>
+                        </template>
+                    </t-popup>
+                </span>
                 <!-- Fallback 提示图标 -->
                 <t-tooltip v-if="session.is_fallback" :content="$t('chat.fallbackHint')" placement="top">
                     <t-button size="small" variant="outline" shape="round" class="fallback-icon-btn">
@@ -119,7 +153,7 @@ const mentionTagIcon = (item) => {
     return 'file';
 };
 
-const emit = defineEmits(['scroll-bottom', 'render-complete-change'])
+const emit = defineEmits(['scroll-bottom', 'render-complete-change', 'feedback'])
 const { t } = useI18n()
 const uiStore = useUIStore();
 let parentMd = ref()
@@ -278,6 +312,54 @@ const handleAddToKnowledge = () => {
     MessagePlugin.info(t('chat.editorOpened'));
 };
 
+// ---- 任务1：点赞 / 点踩 反馈（前端交互，用户无需感知后端片段关联逻辑）----
+// feedback 取值：'' | 'like' | 'dislike'
+const feedback = ref('')
+const dislikeReason = ref('')
+const dislikeReasonDetail = ref('')
+const dislikeReasonOpen = ref(false)
+
+// 点赞：再次点击取消；不影响后端片段关联（那部分由任务2在生成时自动记录）
+const handleLike = () => {
+    feedback.value = feedback.value === 'like' ? '' : 'like'
+    if (feedback.value === 'like') {
+        dislikeReasonOpen.value = false
+        MessagePlugin.success(t('chat.feedbackThanks'))
+    }
+    emit('feedback', { type: feedback.value, messageId: props.session?.id })
+}
+
+// 点踩弹窗显隐变化：打开时重置上一次选择
+const onDislikePopupChange = (visible) => {
+    dislikeReasonOpen.value = visible
+    if (visible) {
+        dislikeReason.value = ''
+        dislikeReasonDetail.value = ''
+    }
+}
+
+// 取消点踩
+const cancelDislike = () => {
+    dislikeReasonOpen.value = false
+}
+
+// 提交点踩原因
+const submitDislike = () => {
+    if (!dislikeReason.value) {
+        MessagePlugin.warning(t('chat.feedbackReasonRequired'))
+        return
+    }
+    feedback.value = 'dislike'
+    dislikeReasonOpen.value = false
+    MessagePlugin.success(t('chat.feedbackThanks'))
+    emit('feedback', {
+        type: 'dislike',
+        reason: dislikeReason.value,
+        detail: dislikeReasonDetail.value,
+        messageId: props.session?.id,
+    })
+}
+
 // 处理 markdown-content 中图片的点击事件
 const handleMarkdownImageClick = (e) => {
     const target = e.target;
@@ -374,6 +456,51 @@ onBeforeUnmount(() => {
     &:hover {
         color: var(--td-text-color-placeholder) !important;
         border-color: var(--td-component-border) !important;
+    }
+}
+
+// 点赞 / 点踩 操作区（任务1）
+.answer-feedback {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+
+    .feedback-btn {
+        &.is-active {
+            color: var(--td-brand-color) !important;
+            border-color: var(--td-brand-color) !important;
+            background-color: var(--td-brand-color-light) !important;
+        }
+    }
+}
+
+// 点踩原因弹窗面板
+.dislike-reason-panel {
+    width: 260px;
+    padding: 4px 2px;
+
+    .dislike-reason-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--td-text-color-primary);
+        margin-bottom: 10px;
+    }
+
+    .dislike-reason-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 10px;
+    }
+
+    .dislike-reason-detail {
+        margin-bottom: 10px;
+    }
+
+    .dislike-reason-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
     }
 }
 
