@@ -259,3 +259,42 @@ export function getWeKnoraCloudStatus(): Promise<WeKnoraCloudStatusResult> {
       })
   })
 }
+
+// 模型用量聚合结果
+export interface ModelUsageAggregate {
+  model_id: string;
+  call_count: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cached_tokens: number;
+  cost: number;
+  cache_hit_rate: number;
+}
+
+// 查询模型用量（按模型与时间区间聚合）
+export function getModelUsage(params?: {
+  model_id?: string;
+  start?: string;
+  end?: string;
+}): Promise<ModelUsageAggregate[]> {
+  return new Promise((resolve, reject) => {
+    const query = new URLSearchParams();
+    if (params?.model_id) query.append('model_id', params.model_id);
+    if (params?.start) query.append('start', params.start);
+    if (params?.end) query.append('end', params.end);
+    const qs = query.toString();
+    get(`/api/v1/models/usage${qs ? `?${qs}` : ''}`)
+      .then((response: any) => {
+        if (response.success && response.data) {
+          resolve(response.data);
+        } else {
+          resolve([]);
+        }
+      })
+      .catch((error: any) => {
+        console.error('Failed to get model usage:', error);
+        reject(error);
+      });
+  });
+}

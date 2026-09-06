@@ -4332,6 +4332,15 @@ export default {
   modelSettings: {
     title: 'Model Settings',
     description: 'Manage different types of AI models, including local Ollama and remote APIs',
+    usage: {
+      tab: 'Usage',
+      model: 'Model',
+      calls: 'Calls',
+      tokens: 'Total Tokens',
+      hitRate: 'Cache Hit Rate',
+      cost: 'Cost (USD)',
+      empty: 'No usage data yet. Run an evaluation or a conversation to see usage.',
+    },
     typeShort: {
       chat: 'Chat',
       embedding: 'Embedding',

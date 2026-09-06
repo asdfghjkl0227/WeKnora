@@ -1943,6 +1943,15 @@ export default {
     title: '模型配置',
     description: '管理不同类型的 AI 模型，支持 Ollama 本地模型和远程 API',
     copySuffix: ' 副本',
+    usage: {
+      tab: '用量统计',
+      model: '模型',
+      calls: '调用次数',
+      tokens: '总 Token',
+      hitRate: '缓存命中率',
+      cost: '费用 (USD)',
+      empty: '暂无用量数据，运行一次评测或对话后即可看到',
+    },
     builtinTag: '内置',
     confirmDelete: '确定删除模型「{name}」吗？',
     debug: {

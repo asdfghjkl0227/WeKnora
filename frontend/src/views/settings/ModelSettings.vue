@@ -43,9 +43,22 @@
       <t-tab-panel value="rerank" :label="`${$t('modelSettings.typeShort.rerank')}(${countByType('rerank')})`" />
       <t-tab-panel value="vllm" :label="`${$t('modelSettings.typeShort.vllm')}(${countByType('vllm')})`" />
       <t-tab-panel value="asr" :label="`${$t('modelSettings.typeShort.asr')}(${countByType('asr')})`" />
+      <t-tab-panel value="usage" :label="`${$t('modelSettings.usage.tab')}`" />
     </t-tabs>
 
-    <t-loading :loading="loading" size="small" class="model-list-loading">
+    <div v-if="activeTypeFilter === 'usage'" class="usage-panel">
+      <t-loading :loading="usageLoading" size="small">
+        <t-table
+          :data="usageList"
+          :columns="usageColumns"
+          row-key="model_id"
+          :empty="$t('modelSettings.usage.empty')"
+          stripe
+          bordered
+        />
+      </t-loading>
+    </div>
+    <t-loading v-else :loading="loading" size="small" class="model-list-loading">
       <div v-if="!loading && filteredModels.length === 0 && !authStore.hasRole('admin')" class="empty-state">
         <t-empty :description="emptyHint" />
       </div>
@@ -147,7 +160,7 @@ import { AddIcon, PlayCircleIcon } from 'tdesign-icons-vue-next'
 import { useI18n } from 'vue-i18n'
 import ModelEditorDialog from '@/components/ModelEditorDialog.vue'
 import ModelDebugDrawer from '@/components/ModelDebugDrawer.vue'
-import { listModels, createModel, updateModel as updateModelAPI, deleteModel as deleteModelAPI, type ModelConfig } from '@/api/model'
+import { listModels, createModel, updateModel as updateModelAPI, deleteModel as deleteModelAPI, getModelUsage, type ModelConfig, type ModelUsageAggregate } from '@/api/model'
 import { useAuthStore } from '@/stores/auth'
 import { useUIStore } from '@/stores/ui'
 
@@ -155,7 +168,7 @@ const { t, te } = useI18n()
 const authStore = useAuthStore()
 const uiStore = useUIStore()
 type ModelType = 'chat' | 'embedding' | 'rerank' | 'vllm' | 'asr'
-type FilterType = 'all' | ModelType
+type FilterType = 'all' | ModelType | 'usage'
 
 const showDialog = ref(false)
 const showDebugDrawer = ref(false)
@@ -163,6 +176,10 @@ const currentModelType = ref<ModelType>('chat')
 const editingModel = ref<any>(null)
 const loading = ref(true)
 const activeTypeFilter = ref<FilterType>('all')
+
+// 模型用量统计
+const usageLoading = ref(false)
+const usageList = ref<ModelUsageAggregate[]>([])
 
 const MODEL_TAB_TYPES: FilterType[] = ['chat', 'embedding', 'rerank', 'vllm', 'asr']
 watch(
@@ -225,6 +242,41 @@ const allLegacyModels = computed(() => allModels.value.map(convertToLegacyFormat
 const filteredModels = computed(() => {
   if (activeTypeFilter.value === 'all') return allLegacyModels.value
   return allLegacyModels.value.filter(m => m._modelType === activeTypeFilter.value)
+})
+
+// 模型用量统计面板
+const usageColumns = computed(() => [
+  { colKey: 'model_id', title: t('modelSettings.usage.model'), ellipsis: true },
+  { colKey: 'call_count', title: t('modelSettings.usage.calls'), width: 120 },
+  { colKey: 'total_tokens', title: t('modelSettings.usage.tokens'), width: 140 },
+  {
+    colKey: 'cache_hit_rate',
+    title: t('modelSettings.usage.hitRate'),
+    width: 130,
+    cell: (_h: any, { row }: any) => `${(row.cache_hit_rate * 100).toFixed(1)}%`,
+  },
+  {
+    colKey: 'cost',
+    title: t('modelSettings.usage.cost'),
+    width: 130,
+    cell: (_h: any, { row }: any) => `$${row.cost.toFixed(6)}`,
+  },
+])
+
+async function loadUsage() {
+  usageLoading.value = true
+  try {
+    usageList.value = await getModelUsage()
+  } catch (e) {
+    console.error('Failed to load model usage:', e)
+    usageList.value = []
+  } finally {
+    usageLoading.value = false
+  }
+}
+
+watch(activeTypeFilter, (value) => {
+  if (value === 'usage') loadUsage()
 })
 
 const countByType = (type: ModelType) => allLegacyModels.value.filter(m => m._modelType === type).length
