@@ -1941,6 +1941,15 @@ export default {
     title: 'Настройки моделей',
     description: 'Управление типами AI‑моделей: локальные (Ollama) и удалённые API',
     copySuffix: ' копия',
+    usage: {
+      tab: 'Usage',
+      model: 'Model',
+      calls: 'Calls',
+      tokens: 'Total Tokens',
+      hitRate: 'Cache Hit Rate',
+      cost: 'Cost (USD)',
+      empty: 'No usage data yet. Run an evaluation or a conversation to see usage.',
+    },
     builtinTag: 'Встроенная',
     confirmDelete: 'Удалить модель «{name}»?',
     debug: {

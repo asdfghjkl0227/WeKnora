@@ -1941,6 +1941,15 @@ export default {
     title: '모델 설정',
     description: '다양한 유형의 AI 모델을 관리합니다. Ollama 로컬 모델과 원격 API를 지원합니다',
     copySuffix: ' 사본',
+    usage: {
+      tab: 'Usage',
+      model: 'Model',
+      calls: 'Calls',
+      tokens: 'Total Tokens',
+      hitRate: 'Cache Hit Rate',
+      cost: 'Cost (USD)',
+      empty: 'No usage data yet. Run an evaluation or a conversation to see usage.',
+    },
     builtinTag: '기본제공',
     confirmDelete: '모델 "{name}"을(를) 삭제하시겠습니까?',
     debug: {
