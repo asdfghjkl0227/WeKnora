@@ -8,6 +8,12 @@ import (
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
+// UsageRecorder is an optional hook that persists each model call's usage to
+// storage. The container injects it at startup; the chat package itself has no
+// storage dependency. Calls fire asynchronously so accounting never blocks the
+// request path.
+var UsageRecorder func(ctx context.Context, record types.ModelUsageRecord)
+
 // logUsage emits the standard "[LLM Usage]" line shared by every Chat
 // implementation. It is a no-op when usage is nil so callers can pass through
 // optional usage blocks without guarding at each call site.
@@ -15,7 +21,30 @@ func logUsage(ctx context.Context, model string, u *types.TokenUsage) {
 	if u == nil {
 		return
 	}
+	// Fold this call into the caller's usage accumulator (if any) so that
+	// evaluation and other orchestrators can sum token usage across a whole
+	// pipeline run. The log line below is unchanged.
+	if acc := types.UsageAccumulatorFromContext(ctx); acc != nil {
+		acc.Add(*u)
+	}
 	purpose, prefixFingerprint := types.LLMCallMetadataFromContext(ctx)
+	if UsageRecorder != nil {
+		tenantID, _ := types.TenantIDFromContext(ctx)
+		record := types.ModelUsageRecord{
+			TenantID:         tenantID,
+			ModelID:          model,
+			Purpose:          purpose,
+			PromptTokens:     u.PromptTokens,
+			CompletionTokens: u.CompletionTokens,
+			TotalTokens:      u.TotalTokens,
+			CachedTokens:     u.CachedTokens,
+			CacheReadTokens:  u.CacheReadTokens,
+			Cost:             types.ComputeTokenCost(u.PromptTokens, u.CompletionTokens),
+		}
+		go func() {
+			UsageRecorder(logger.CloneContext(ctx), record)
+		}()
+	}
 	logger.Infof(ctx,
 		"[LLM Usage] model=%s, purpose=%s, prompt_prefix=%s, prompt_tokens=%d, completion_tokens=%d, "+
 			"total_tokens=%d, cached_tokens=%d, cache_read_tokens=%d, cache_write_tokens=%d, "+

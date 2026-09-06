@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"sync"
 )
 
 // EnvLanguage returns the WEKNORA_LANGUAGE environment variable value, or empty string if unset.
@@ -369,4 +370,52 @@ func LanguageLocaleName(locale string) string {
 		// For unknown locales, return the locale itself
 		return locale
 	}
+}
+
+// UsageAccumulator aggregates TokenUsage across multiple model calls within
+// one logical unit of work (e.g. one evaluation sample). It is goroutine-safe
+// so a single accumulator can be shared across concurrent calls.
+type UsageAccumulator struct {
+	mu    sync.Mutex
+	usage TokenUsage
+}
+
+// Add folds one call's usage into the accumulator.
+func (a *UsageAccumulator) Add(u TokenUsage) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.usage.Accumulate(u)
+}
+
+// Total returns the accumulated usage without clearing it.
+func (a *UsageAccumulator) Total() TokenUsage {
+	if a == nil {
+		return TokenUsage{}
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.usage
+}
+
+type usageAccumulatorContextKey struct{}
+
+// WithUsageAccumulator attaches a fresh usage accumulator to ctx and returns
+// both the annotated context and the accumulator, so a caller can collect the
+// total token usage of everything that runs under that context.
+func WithUsageAccumulator(ctx context.Context) (context.Context, *UsageAccumulator) {
+	acc := &UsageAccumulator{}
+	return context.WithValue(ctx, usageAccumulatorContextKey{}, acc), acc
+}
+
+// UsageAccumulatorFromContext returns the accumulator attached to ctx, or nil
+// when no accumulator is present (the common case outside evaluation).
+func UsageAccumulatorFromContext(ctx context.Context) *UsageAccumulator {
+	if ctx == nil {
+		return nil
+	}
+	acc, _ := ctx.Value(usageAccumulatorContextKey{}).(*UsageAccumulator)
+	return acc
 }

@@ -23,17 +23,19 @@ import (
 // ModelHandler handles HTTP requests for model-related operations
 // It implements the necessary methods to create, retrieve, update, and delete models
 type ModelHandler struct {
-	service interfaces.ModelService
+	service   interfaces.ModelService
+	usageRepo interfaces.ModelUsageRepository
 }
 
 // NewModelHandler creates a new instance of ModelHandler
 // It requires a model service implementation that handles business logic
 // Parameters:
 //   - service: An implementation of the ModelService interface
+//   - usageRepo: An implementation of the ModelUsageRepository interface
 //
 // Returns a pointer to the newly created ModelHandler
-func NewModelHandler(service interfaces.ModelService) *ModelHandler {
-	return &ModelHandler{service: service}
+func NewModelHandler(service interfaces.ModelService, usageRepo interfaces.ModelUsageRepository) *ModelHandler {
+	return &ModelHandler{service: service, usageRepo: usageRepo}
 }
 
 // Per-response redaction/stripping for Model now lives in
@@ -202,6 +204,62 @@ func (h *ModelHandler) ListModels(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    dto.NewModelResponses(ctx, models),
+	})
+}
+
+// GetModelUsage godoc
+// @Summary      查询模型用量
+// @Description  按模型与时间区间聚合查询各模型的调用次数、token 用量、缓存命中率与费用
+// @Tags         模型管理
+// @Accept       json
+// @Produce      json
+// @Param        model_id  query     string  false  "模型名（可选，缺省查询全部）"
+// @Param        start     query     string  false  "起始时间（RFC3339）"
+// @Param        end       query     string  false  "结束时间（RFC3339）"
+// @Success      200       {object}  map[string]interface{}  "用量聚合结果"
+// @Failure      400       {object}  errors.AppError         "请求参数错误"
+// @Security     Bearer
+// @Security     ApiKeyAuth
+// @Router       /models/usage [get]
+func (h *ModelHandler) GetModelUsage(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	tenantID := c.GetUint64(types.TenantIDContextKey.String())
+	if tenantID == 0 {
+		logger.Error(ctx, "Tenant ID is empty")
+		c.Error(errors.NewBadRequestError("Workspace ID cannot be empty"))
+		return
+	}
+
+	modelID := c.Query("model_id")
+	var start, end time.Time
+	if s := c.Query("start"); s != "" {
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			c.Error(errors.NewBadRequestError("Invalid start time").WithDetails(err.Error()))
+			return
+		}
+		start = t
+	}
+	if s := c.Query("end"); s != "" {
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			c.Error(errors.NewBadRequestError("Invalid end time").WithDetails(err.Error()))
+			return
+		}
+		end = t
+	}
+
+	aggregates, err := h.usageRepo.AggregateUsage(ctx, tenantID, modelID, start, end)
+	if err != nil {
+		logger.ErrorWithFields(ctx, err, nil)
+		c.Error(errors.NewInternalServerError(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    aggregates,
 	})
 }
 

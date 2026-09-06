@@ -157,6 +157,8 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(repository.NewMessageRepository))
 	must(container.Provide(repository.NewMessageSuggestionRepository))
 	must(container.Provide(repository.NewModelRepository))
+	must(container.Provide(repository.NewModelUsageRepository))
+	must(container.Provide(repository.NewEvaluationRepository))
 	must(container.Provide(repository.NewUserRepository))
 	must(container.Provide(repository.NewAuthTokenRepository))
 	must(container.Provide(repository.NewSystemSettingRepository))
@@ -430,6 +432,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	// local:// images that live under a tenant's configured storage PathPrefix
 	// (which is not encoded in the local:// URL).
 	must(container.Invoke(registerChatLocalImageResolver))
+	must(container.Invoke(registerChatUsageRecorder))
 
 	// Router configuration
 	logger.Debugf(ctx, "[Container] Registering router and starting task server...")
@@ -504,6 +507,16 @@ func registerChatLocalImageResolver(
 			return nil, false
 		}
 		return data, true
+	}
+}
+
+// registerChatUsageRecorder wires the chat package's usage hook to the model
+// usage repository, so every model call is persisted for the usage dashboard.
+func registerChatUsageRecorder(usageRepo interfaces.ModelUsageRepository) {
+	chat.UsageRecorder = func(ctx context.Context, record types.ModelUsageRecord) {
+		if err := usageRepo.CreateUsageRecord(ctx, &record); err != nil {
+			logger.Errorf(ctx, "failed to record model usage: %v", err)
+		}
 	}
 }
 

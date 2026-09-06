@@ -33,3 +33,14 @@ type DatasetService interface {
 	// GetDatasetByID retrieves QA pairs from dataset by ID
 	GetDatasetByID(ctx context.Context, datasetID string) ([]*types.QAPair, error)
 }
+
+// EvaluationRepository is the persistence contract for evaluation runs. It
+// stores the full snapshot of a run — task status, config snapshot and metric
+// results — so the run survives a process restart.
+type EvaluationRepository interface {
+	// SaveRun upserts the full evaluation snapshot. It may be called
+	// repeatedly as a run progresses.
+	SaveRun(ctx context.Context, detail *types.EvaluationDetail) error
+	// GetRun returns the snapshot by task id, or (nil, nil) when absent.
+	GetRun(ctx context.Context, taskID string) (*types.EvaluationDetail, error)
+}

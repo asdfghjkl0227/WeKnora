@@ -43,9 +43,10 @@ type EvaluationTask struct {
 	TenantID  uint64 `json:"tenant_id"`  // Tenant/Organization ID
 	DatasetID string `json:"dataset_id"` // Dataset ID for evaluation
 
-	StartTime time.Time        `json:"start_time"`        // Task start time
-	Status    EvaluationStatue `json:"status"`            // Current task status
-	ErrMsg    string           `json:"err_msg,omitempty"` // Error message if failed
+	StartTime time.Time        `json:"start_time"`         // Task start time
+	EndTime   *time.Time       `json:"end_time,omitempty"` // Task end time (set when the run finishes)
+	Status    EvaluationStatue `json:"status"`             // Current task status
+	ErrMsg    string           `json:"err_msg,omitempty"`  // Error message if failed
 
 	Total    int `json:"total,omitempty"`    // Total items to evaluate
 	Finished int `json:"finished,omitempty"` // Completed items count
@@ -56,6 +57,10 @@ type EvaluationDetail struct {
 	Task   *EvaluationTask `json:"task"`             // Evaluation task info
 	Params *ChatManage     `json:"params"`           // Evaluation parameters
 	Metric *MetricResult   `json:"metric,omitempty"` // Evaluation metrics
+	// Cost is the total estimated cost (USD) of all model calls in the run.
+	Cost float64 `json:"cost,omitempty"`
+	// LatencyMS is the total wall-clock time of the evaluation loop in ms.
+	LatencyMS int64 `json:"latency_ms,omitempty"`
 }
 
 // String returns JSON representation of EvaluationTask
@@ -114,3 +119,44 @@ const (
 	StateAfterComplete                      // After completion
 	StateEnd                                // Evaluation ended
 )
+
+// EvaluationRun is the persisted snapshot of one evaluation task. It backs the
+// durable evaluation record so a run survives a process restart, replacing the
+// previous in-memory storage.
+type EvaluationRun struct {
+	ID        string `json:"id" gorm:"primaryKey;type:varchar(255)"`
+	TenantID  uint64 `json:"tenant_id" gorm:"column:tenant_id;not null"`
+	DatasetID string `json:"dataset_id" gorm:"column:dataset_id;type:varchar(255)"`
+	Status    int    `json:"status" gorm:"not null;default:0"`
+	ErrMsg    string `json:"err_msg" gorm:"column:err_msg;type:text"`
+	Total     int    `json:"total" gorm:"not null;default:0"`
+	Finished  int    `json:"finished" gorm:"not null;default:0"`
+	// Params is the serialized ChatManage config snapshot used to reproduce
+	// the run from a clean environment.
+	Params    JSON       `json:"params" gorm:"column:params;type:jsonb"`
+	StartTime time.Time  `json:"start_time" gorm:"column:start_time"`
+	EndTime   *time.Time `json:"end_time" gorm:"column:end_time"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+// TableName returns the database table name for EvaluationRun.
+func (EvaluationRun) TableName() string { return "evaluation_runs" }
+
+// EvaluationMetric is the persisted metric result of one evaluation run. The
+// cost / latency columns are reserved for a later task and are left empty for
+// now.
+type EvaluationMetric struct {
+	ID                string    `json:"id" gorm:"primaryKey;type:varchar(36)"`
+	RunID             string    `json:"run_id" gorm:"column:run_id;type:varchar(255);not null;uniqueIndex:idx_evaluation_metrics_run"`
+	TenantID          uint64    `json:"tenant_id" gorm:"column:tenant_id;not null"`
+	RetrievalMetrics  JSON      `json:"retrieval_metrics" gorm:"column:retrieval_metrics;type:jsonb"`
+	GenerationMetrics JSON      `json:"generation_metrics" gorm:"column:generation_metrics;type:jsonb"`
+	Cost              float64   `json:"cost" gorm:"column:cost"`
+	LatencyMS         int64     `json:"latency_ms" gorm:"column:latency_ms"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// TableName returns the database table name for EvaluationMetric.
+func (EvaluationMetric) TableName() string { return "evaluation_metrics" }
