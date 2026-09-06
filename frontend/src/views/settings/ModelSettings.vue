@@ -375,7 +375,7 @@ const loadModels = async () => {
 
 // 打开添加对话框；类型在抽屉内选择，此处仅按当前 Tab 预填默认值
 const openAddDialog = () => {
-  currentModelType.value = activeTypeFilter.value === 'all' ? 'chat' : activeTypeFilter.value
+  currentModelType.value = (activeTypeFilter.value === 'all' || activeTypeFilter.value === 'usage') ? 'chat' : activeTypeFilter.value
   editingModel.value = null
   showDialog.value = true
 }
