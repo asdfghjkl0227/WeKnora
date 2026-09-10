@@ -212,7 +212,7 @@ func RenderPromptPlaceholders(template string, vals PlaceholderValues) string {
 	}
 
 	now := time.Now()
-	autoFill("current_time", now.Format("2006-01-02 15:04:05"))
+	autoFill("current_time", now.Format("2006-01-02 15:04"))
 	autoFill("current_week", now.Weekday().String())
 	autoFill("yesterday", now.AddDate(0, 0, -1).Format("2006-01-02"))
 

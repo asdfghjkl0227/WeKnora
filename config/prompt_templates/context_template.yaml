@@ -21,6 +21,9 @@ templates:
 
       {{query}}
 
+      Reference materials:
+      {{contexts}}
+
   - id: "detailed_context"
     name: "Detailed Template"
     description: "Context template with detailed instructions"
