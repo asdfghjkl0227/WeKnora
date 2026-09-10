@@ -104,6 +104,11 @@ func NewEmbedder(config Config, pooler EmbedderPooler, ollamaService *ollama.Oll
 	if langfuse.GetManager().Enabled() {
 		e = &langfuseEmbedder{inner: e}
 	}
+	// Outermost: cache identical (model, dimensions, text) embeddings so that
+	// repeated ingestion / index rebuilds do not re-bill the provider. A cache
+	// hit short-circuits before langfuse/debug/concurrency, so it produces no
+	// downstream observation and never occupies a background concurrency slot.
+	e = wrapEmbeddingCache(e, globalEmbeddingCacheInstance())
 	return e, nil
 }
 
