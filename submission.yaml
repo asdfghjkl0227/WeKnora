@@ -1,0 +1,15 @@
+version: 1
+student:
+  name: "苗哲铭"
+  github_id: "asdfghjkl0227"
+topic:
+  id: "三"
+  title: "质量评测基线与成本可观测"
+result:
+  type: code
+  url: "https://github.com/asdfghjkl0227/WeKnora"
+repository:
+  url: "https://github.com/asdfghjkl0227/WeKnora.git"
+  branch: "main"
+  commit: "9a417d39cfb1c5c146858cababc8ae2314119924"
+  tag: "rhino-2026-final-三"
