@@ -2,7 +2,7 @@
 
 > 腾讯犀牛鸟开源人才培养计划 · 实作成果
 > 基础仓库：[WeKnora](https://github.com/Tencent/WeKnora)
-> 最终 Tag：`rhino-2026-final-三`　完整 Commit：`9a417d39cfb1c5c146858cababc8ae2314119924`
+> 最终 Tag：`rhino-2026-final-三`　完整 Commit：`b08f0e3721a680fc84a07ae9aacb69995c5b9dc9`
 
 本文件说明**任务一～六完成了什么、如何验证、以及现存的问题与特性**。
 （根目录原有的 `README.md` 为 WeKnora 官方文档，未改动。）
