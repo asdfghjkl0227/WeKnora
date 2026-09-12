@@ -48,6 +48,7 @@ WeKnora 的评测指标（Precision / Recall / MRR / NDCG / MAP / BLEU / ROUGE�
 - **新增工作流** `.github/workflows/evaluation.yml`：定时/手动触发，起环境后跑评测。
 - **一条命令可复现**：`scripts/evaluate.sh` + `scripts/ci-setup.sh`。
 - **阈值阻断**：`scripts/check-eval-threshold.py` 读取结果 JSON，逐项与 `scripts/eval-thresholds.json` 比较，任一指标低于阈值即 `exit 1`。
+- **阈值基线**：`scripts/eval-thresholds.json` 的检索类阈值（precision/recall/ndcg/mrr/map = 0.5）取自默认数据集的一次真实评测（precision=1、recall=0.75、ndcg/mrr/map=1），取 0.5 作安全边际——低于基线、又能拦住"检索退化到全 0"的情况；生成类指标（BLEU/ROUGE）因 LLM 输出非确定，不设门禁（保持 0.0）。若换更大数据集，应按新基线重新校准。
 - **注意**：CI 中必须用 `--build` 构建镜像（否则跑的是官方镜像、不是 PR 代码）；fork PR 因 GitHub secrets 限制无法取用评测凭证，属安全机制而非缺陷。
 
 ### 任务四：模型调用落库 + 模型页展示
@@ -145,7 +146,7 @@ docker logs --since 5m WeKnora-app 2>&1 | grep -c "Embedder BatchEmbed"
 docker exec WeKnora-postgres psql -U postgres -d WeKnora -c \
   "SELECT SUM(cached_tokens) AS cached, SUM(prompt_tokens) AS prompt, \
           ROUND(100.0*SUM(cached_tokens)/NULLIF(SUM(prompt_tokens),0),1) AS hit_rate \
-   FROM model_usage_records WHERE purpose='generation';"
+   FROM model_usage_records WHERE purpose='knowledge_qa';"
 ```
 **通过标志**：**同一会话连续多轮**提问后，`hit_rate` 相比改动前提升。
 > 单轮提问没有可复用前缀，提升不明显——务必用多轮对话对比。
